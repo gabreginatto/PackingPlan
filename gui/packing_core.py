@@ -16,6 +16,7 @@ CONTAINER_WIDTH_M = 2.352
 CONTAINER_HEIGHT_M = 2.698
 CONTAINER_PAYLOAD_KG = 26000.0
 HANDLING_CLEARANCE_MM = 5.0
+EXCLUDED_DN = {20}
 
 # --- pipe dimension catalog -------------------------------------------------
 
@@ -79,6 +80,8 @@ def kg_per_metre(family: str, od_mm: float, wall_mm: float | None) -> float:
 def build_catalog() -> list[dict]:
     cat = []
     for size, dim in sorted(PPR_S5.items()):
+        if size in EXCLUDED_DN:
+            continue
         cat.append({
             "family": "PP-R (S5 cold)",
             "size": f"DN{size}",
@@ -89,6 +92,8 @@ def build_catalog() -> list[dict]:
             "can_telescope": True,
         })
     for size, dim in sorted(PPR_S32.items()):
+        if size in EXCLUDED_DN:
+            continue
         cat.append({
             "family": "PP-R (S3.2 hot)",
             "size": f"DN{size}",
@@ -109,6 +114,8 @@ def build_catalog() -> list[dict]:
             "can_telescope": True,
         })
     for dn in HDPE_SIZES:
+        if dn in EXCLUDED_DN:
+            continue
         od = float(dn)
         wall = round(od / 17.0, 2)
         cat.append({
@@ -121,6 +128,8 @@ def build_catalog() -> list[dict]:
             "can_telescope": True,
         })
     for dn, od in STEEL_NPS_OD.items():
+        if dn in EXCLUDED_DN:
+            continue
         cat.append({
             "family": "Steel-Plastic Composite",
             "size": f"DN{dn}",
@@ -279,9 +288,14 @@ def items_to_pipes(items: list[dict]) -> list[Pipe]:
         cat = lookup(it["family"], it["size"])
         if cat is None:
             continue
-        length_m = float(it.get("length_m") or 5.8)
-        kg_per_m = kg_per_metre(it["family"].split(" (")[0] if "PP-R" in it["family"] else it["family"],
-                                cat["od_mm"], cat["wall_mm"])
+        try:
+            raw_length = it.get("length_m", 5.8)
+            length_m = 5.8 if raw_length in (None, "") else float(raw_length)
+            qty = int(it["qty"])
+        except (TypeError, ValueError):
+            continue
+        if length_m <= 0 or qty <= 0 or int(cat["dn"]) in EXCLUDED_DN:
+            continue
         # PP-R family normalisation for density lookup
         family_norm = "PP-R" if "PP-R" in it["family"] else it["family"]
         kg_per_m = kg_per_metre(family_norm, cat["od_mm"], cat["wall_mm"])
@@ -289,7 +303,7 @@ def items_to_pipes(items: list[dict]) -> list[Pipe]:
             family=it["family"],
             size=it["size"],
             length_m=length_m,
-            qty=int(it["qty"]),
+            qty=qty,
             od_mm=cat["od_mm"],
             wall_mm=cat["wall_mm"],
             id_mm=cat["id_mm"],
@@ -334,13 +348,13 @@ def build_plan(items: list[dict]) -> dict:
                     "host_od_mm": h.od_mm,
                     "host_id_mm": h.id_mm,
                     "host_kg": h.kg_per_pipe,
-                    "inners": [],  # list of dicts: size, od_mm, kg
+                    "inners": [],  # nested unit dicts: size, od_mm, kg, inners
                 }
                 remaining[h.size] -= 1
                 # Try to fill with smaller pipes; recursively nest
                 available = (h.id_mm - HANDLING_CLEARANCE_MM) if h.id_mm else 0
                 if h.can_telescope and available > 0:
-                    self_fill_inner(unit, members, remaining, available)
+                    self_fill_inner(unit, h, members, remaining, available)
                 host_units.append(unit)
 
         # Now pack host units into containers, weight-limited.
@@ -370,7 +384,7 @@ def build_plan(items: list[dict]) -> dict:
                 weight = 0.0
                 while i < len(units) and len(chunk) < geom_per_container:
                     u = units[i]
-                    unit_w = u["host_kg"] + sum(x["kg"] for x in u["inners"])
+                    unit_w = unit_weight(u)
                     if weight + unit_w > CONTAINER_PAYLOAD_KG and chunk:
                         break
                     chunk.append(u)
@@ -384,8 +398,8 @@ def build_plan(items: list[dict]) -> dict:
                     stack=stack, length_positions=length_positions,
                     units=chunk, weight=weight,
                 ))
-                total_pipes_loose += len(chunk) * (1 + (len(chunk[0]["inners"]) if chunk else 0))
-                total_pipes_nested += sum(len(u["inners"]) for u in chunk)
+                total_pipes_loose += sum(unit_pipe_count(u) for u in chunk)
+                total_pipes_nested += sum(unit_nested_count(u) for u in chunk)
 
     # Summary
     total_volume_pre = sum(p.qty * math.pi / 4 * p.od_m ** 2 * p.length_m for p in pipes)
@@ -399,14 +413,26 @@ def build_plan(items: list[dict]) -> dict:
     return {"containers": containers, "summary": summary}
 
 
-def self_fill_inner(unit: dict, members: list[Pipe], remaining: dict,
-                    available_id_mm: float) -> None:
+def unit_weight(unit: dict) -> float:
+    return unit["host_kg"] + sum(unit_weight(inner) for inner in unit["inners"])
+
+
+def unit_pipe_count(unit: dict) -> int:
+    return 1 + sum(unit_pipe_count(inner) for inner in unit["inners"])
+
+
+def unit_nested_count(unit: dict) -> int:
+    return sum(unit_pipe_count(inner) for inner in unit["inners"])
+
+
+def self_fill_inner(unit: dict, host_pipe: Pipe, members: list[Pipe],
+                    remaining: dict, available_id_mm: float) -> None:
     """Fill `unit` (a host pipe) with as many smaller pipes as it can hold,
     decrementing the `remaining` map. Uses min-circle-of-n packing.
     """
     # Try inners largest-first.
     for inner in sorted(members, key=lambda p: -p.od_mm):
-        if inner.od_mm >= unit["host_od_mm"]:
+        if inner.od_mm >= host_pipe.od_mm:
             continue
         if remaining.get(inner.size, 0) <= 0:
             continue
@@ -419,16 +445,22 @@ def self_fill_inner(unit: dict, members: list[Pipe], remaining: dict,
             continue
         take = min(cap, remaining[inner.size])
         for _ in range(take):
-            unit["inners"].append({
+            inner_unit = {
+                "host_size": inner.size,
+                "host_od_mm": inner.od_mm,
+                "host_id_mm": inner.id_mm,
+                "host_kg": inner.kg_per_pipe,
                 "size": inner.size,
                 "od_mm": inner.od_mm,
                 "id_mm": inner.id_mm,
                 "kg": inner.kg_per_pipe,
-            })
+                "inners": [],
+            }
             remaining[inner.size] -= 1
-        # only one tier of nesting per host for the v1 algorithm
-        # (PVC 4">3">2" would need recursive treatment; we'll add that
-        # if user reports a need)
+            nested_available = (inner.id_mm - HANDLING_CLEARANCE_MM) if inner.id_mm else 0
+            if inner.can_telescope and nested_available > 0:
+                self_fill_inner(inner_unit, inner, members, remaining, nested_available)
+            unit["inners"].append(inner_unit)
         break
 
 
@@ -460,12 +492,25 @@ def make_container(family: str, length_m: float, host_size: str,
                     "cx_m": cx, "cy_m": cy,
                     "od_mm": host_od_mm,
                     "host_size": host_size,
-                    "inners": units[idx]["inners"],
+                    "inners": flatten_inners(units[idx]["inners"]),
                 }
                 for idx, (cx, cy) in enumerate(used_positions)
             ],
         },
     }
+
+
+def flatten_inners(inners: list[dict]) -> list[dict]:
+    out = []
+    for inner in inners:
+        out.append({
+            "size": inner["host_size"],
+            "od_mm": inner["host_od_mm"],
+            "id_mm": inner["host_id_mm"],
+            "kg": inner["host_kg"],
+            "inners": flatten_inners(inner["inners"]),
+        })
+    return out
 
 
 # --- Excel ingestion (delegates to the existing parser) --------------------
@@ -521,6 +566,8 @@ def classify_description(desc: str) -> dict | None:
 
     if "pe100" in desc_lower:
         dn = int(dn_match.group(1)) if dn_match else 0
+        if dn in EXCLUDED_DN:
+            return None
         if dn in HDPE_SIZES:
             return {"family": "HDPE PE100 PN10", "size": f"DN{dn}", "length_m": length_m}
     if "pvc-u dwv" in desc_lower and inch_match:
@@ -529,6 +576,8 @@ def classify_description(desc: str) -> dict | None:
             return {"family": "PVC-U DWV", "size": size, "length_m": length_m}
     if "pp-r" in desc_lower:
         dn = int(dn_match.group(1)) if dn_match else 0
+        if dn in EXCLUDED_DN:
+            return None
         hot = "s3.2" in desc_lower or "hot" in desc_lower
         family = "PP-R (S3.2 hot)" if hot else "PP-R (S5 cold)"
         if hot and dn in PPR_S32:
@@ -537,6 +586,8 @@ def classify_description(desc: str) -> dict | None:
             return {"family": family, "size": f"DN{dn}", "length_m": length_m}
     if "steel-plastic composite" in desc_lower:
         dn = int(dn_match.group(1)) if dn_match else 0
+        if dn in EXCLUDED_DN:
+            return None
         if dn in STEEL_NPS_OD:
             return {"family": "Steel-Plastic Composite", "size": f"DN{dn}", "length_m": length_m}
     return None

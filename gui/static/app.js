@@ -43,12 +43,14 @@ function populateSizes() {
   const family = el("family").value;
   const sel = el("size");
   sel.innerHTML = "";
-  for (const c of state.catalog.filter((c) => c.family === family)) {
+  const rows = state.catalog.filter((c) => c.family === family);
+  for (const c of rows) {
     const opt = document.createElement("option");
     opt.value = c.size;
     opt.textContent = c.size;
     sel.appendChild(opt);
   }
+  sel.disabled = rows.length === 0;
 }
 
 function addItem() {
@@ -56,7 +58,7 @@ function addItem() {
   const size = el("size").value;
   const length_m = parseFloat(el("length").value);
   const qty = parseInt(el("qty").value, 10);
-  if (!family || !size || !qty || qty <= 0) return;
+  if (!family || !size || !Number.isFinite(length_m) || length_m <= 0 || !qty || qty <= 0) return;
 
   // merge with same key
   const existing = state.items.find(
@@ -152,10 +154,7 @@ function renderContainer() {
   drawCrossSection(c);
 
   const hostCount = c.units_in_container;
-  const innerCount = c.cross_section.circles.reduce(
-    (a, b) => a + b.inners.length,
-    0,
-  );
+  const innerCount = c.cross_section.circles.reduce((a, b) => a + nestedCount(b.inners), 0);
   const pipesTotal = hostCount + innerCount;
   el("m-pipes").textContent = `${fmt(pipesTotal)}`;
   if (innerCount > 0) {
@@ -229,7 +228,7 @@ function drawCrossSection(container) {
     host.setAttribute("stroke-width", Math.max(0.6, r * 0.06));
     svg.appendChild(host);
 
-    // draw the inner pipes — first inner concentric for visual clarity
+    // draw the inner pipes recursively for telescoped chains.
     drawInners(svg, cx, cy, r, circ.inners, scale);
   }
 }
@@ -271,8 +270,14 @@ function drawInners(svg, cx, cy, hostRadius, inners, scale) {
       c.setAttribute("stroke", "#FFFFFF");
       c.setAttribute("stroke-width", Math.max(0.4, innerR * 0.08));
       svg.appendChild(c);
+      drawInners(svg, x, y, innerR, group[i].inners || [], scale);
     }
   }
+}
+
+function nestedCount(inners) {
+  if (!inners || inners.length === 0) return 0;
+  return inners.reduce((sum, inner) => sum + 1 + nestedCount(inner.inners), 0);
 }
 
 function ringPositions(n, cx, cy, r) {
@@ -307,6 +312,8 @@ function renderSummary() {
 function setupDropzone() {
   const dz = el("dropzone");
   const fi = el("file-input");
+  if (dz.dataset.bound === "true") return;
+  dz.dataset.bound = "true";
   dz.addEventListener("click", () => fi.click());
   dz.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -325,8 +332,12 @@ function setupDropzone() {
 
 async function uploadFile(file) {
   const dz = el("dropzone");
-  const prev = dz.innerHTML;
-  dz.innerHTML = `<span class="dz-title">Parsing ${escapeHtml(file.name)}…</span>`;
+  const title = dz.querySelector(".dz-title");
+  const sub = dz.querySelector(".dz-sub");
+  const prevTitle = title ? title.textContent : "";
+  const prevSub = sub ? sub.textContent : "";
+  if (title) title.textContent = `Parsing ${file.name}…`;
+  if (sub) sub.textContent = "";
   const form = new FormData();
   form.append("file", file);
   try {
@@ -343,14 +354,8 @@ async function uploadFile(file) {
       renderItems();
     }
   } finally {
-    dz.innerHTML = prev;
-    // re-bind: rewrite the inner static markup
-    dz.innerHTML = `
-      <span class="dz-title">Drop a PI Excel here</span>
-      <span class="dz-sub">or click to browse</span>
-      <input id="file-input" type="file" accept=".xlsx,.xls" hidden />
-    `;
-    setupDropzone();
+    if (title) title.textContent = prevTitle || "Drop a PI Excel here";
+    if (sub) sub.textContent = prevSub || "or click to browse";
   }
 }
 
