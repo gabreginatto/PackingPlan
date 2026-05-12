@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PackingPlan</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <span class="brand-name">PackingPlan</span>
+    </div>
+    <div class="brand-sub">40ft container · pipe nesting optimiser</div>
+  </header>
+
+  <main class="layout">
+    <!-- LEFT: input card -->
+    <section class="card input-card">
+      <h2 class="card-title">Order</h2>
+
+      <div class="form-row">
+        <label>
+          <span class="lbl">Family</span>
+          <select id="family"></select>
+        </label>
+        <label>
+          <span class="lbl">Size</span>
+          <select id="size"></select>
+        </label>
+      </div>
+      <div class="form-row">
+        <label>
+          <span class="lbl">Length (m)</span>
+          <input id="length" type="number" step="0.1" value="5.8" />
+        </label>
+        <label>
+          <span class="lbl">Quantity</span>
+          <input id="qty" type="number" step="1" value="100" />
+        </label>
+      </div>
+
+      <button id="add-btn" class="btn btn-ghost">+ Add to order</button>
+
+      <div class="divider"></div>
+
+      <div id="dropzone" class="dropzone">
+        <span class="dz-title">Drop a PI Excel here</span>
+        <span class="dz-sub">or click to browse</span>
+        <input id="file-input" type="file" accept=".xlsx,.xls" hidden />
+      </div>
+
+      <div class="divider"></div>
+
+      <h3 class="list-title">Items <span id="item-count" class="muted">0</span></h3>
+      <ul id="order-list" class="order-list"></ul>
+
+      <button id="plan-btn" class="btn btn-primary" disabled>Build packing plan →</button>
+    </section>
+
+    <!-- RIGHT: preview -->
+    <section class="card preview-card">
+      <div class="preview-header">
+        <h2 class="card-title">Container preview</h2>
+        <div class="nav">
+          <button id="prev" class="btn btn-icon" disabled>←</button>
+          <span id="container-label" class="container-label">—</span>
+          <button id="next" class="btn btn-icon" disabled>→</button>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div id="empty-state" class="empty-state">
+          <div class="empty-icon"></div>
+          <div class="empty-title">No plan yet</div>
+          <div class="empty-sub">Add pipes on the left, then build the plan.</div>
+        </div>
+        <svg id="cross-section" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid meet" style="display:none"></svg>
+      </div>
+
+      <div class="metrics" id="metrics" style="display:none">
+        <div class="metric">
+          <div class="m-value" id="m-pipes">—</div>
+          <div class="m-label">Pipes loaded</div>
+        </div>
+        <div class="metric">
+          <div class="m-value" id="m-weight">—</div>
+          <div class="m-label">Weight (kg)</div>
+        </div>
+        <div class="metric">
+          <div class="m-value" id="m-fill">—</div>
+          <div class="m-label">Payload</div>
+        </div>
+        <div class="metric">
+          <div class="m-value" id="m-pattern">—</div>
+          <div class="m-label">Loading pattern</div>
+        </div>
+      </div>
+
+      <div class="summary" id="summary"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

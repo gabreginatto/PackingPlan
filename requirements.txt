@@ -3,3 +3,4 @@ openpyxl>=3.1.0
 xlsxwriter>=3.1.0
 google-genai>=0.2.0
 python-dotenv>=1.0.0
+flask>=3.0.0
