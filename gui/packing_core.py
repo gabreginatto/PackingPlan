@@ -15,8 +15,9 @@ CONTAINER_LENGTH_M = 12.032
 CONTAINER_WIDTH_M = 2.352
 CONTAINER_HEIGHT_M = 2.698
 CONTAINER_PAYLOAD_KG = 26000.0
+CONTAINER_MANUFACTURER_VOLUME_M3 = 66.0
 HANDLING_CLEARANCE_MM = 5.0
-EXCLUDED_DN = {20}
+EXCLUDED_DN: set[int] = set()
 
 # --- pipe dimension catalog -------------------------------------------------
 
@@ -43,8 +44,122 @@ PVC_D2665 = {
     '6"': {"dn": 150, "od_mm": 168.28, "wall_mm": 7.11},
 }
 
-# HDPE PE100 PN10/SDR17 — wall = od / 17
-HDPE_SIZES = [63, 75, 90, 110, 125, 140, 160, 180, 200, 225, 250, 280, 315, 355, 400]
+# Brazilian PVC sewer collector pipe, NBR 7362 style metric OD/wall.
+PVC_SEWER_METRIC = {
+    "DN100": {"dn": 100, "od_mm": 110.0, "wall_mm": 2.5},
+    "DN150": {"dn": 150, "od_mm": 160.0, "wall_mm": 3.6},
+    "DE160": {"dn": 150, "od_mm": 160.0, "wall_mm": 3.6},
+    "DN200": {"dn": 200, "od_mm": 200.0, "wall_mm": 4.5},
+}
+
+# Brazilian PBA water pipe, NBR 5647 class 20 / 1.0 MPa.
+PVC_PBA_PN10 = {
+    "DN50": {"dn": 50, "od_mm": 60.0, "wall_mm": 4.3},
+}
+
+# HDPE / PEAD straight pipes. PE100 SDR17 ~= PN10, SDR13.6 ~= PN12.5,
+# SDR11 ~= PN16. Values below are common minimum wall dimensions.
+HDPE_SIZES = [
+    20, 25, 32, 40, 50, 63, 75, 90, 100, 110, 125, 140, 150, 160,
+    180, 200, 225, 250, 280, 300, 315, 355, 400, 450, 500, 560, 630, 710,
+]
+HDPE_PE100_PN10_WALL = {
+    32: 2.0,
+    40: 2.4,
+    50: 3.0,
+    63: 3.8,
+    75: 4.5,
+    90: 5.4,
+    110: 6.6,
+    125: 7.4,
+    140: 8.3,
+    150: 8.9,
+    160: 9.5,
+    180: 10.7,
+    200: 11.9,
+    225: 13.4,
+    250: 14.8,
+    280: 16.6,
+    300: 17.8,
+    315: 18.7,
+    355: 21.1,
+    400: 23.7,
+}
+HDPE_PE100_PN125_WALL = {
+    25: 2.0,
+    32: 2.4,
+    40: 3.0,
+    50: 3.7,
+    63: 4.7,
+    75: 5.6,
+    90: 6.7,
+    110: 8.1,
+    125: 9.2,
+}
+HDPE_PE80_PN10 = {
+    20: {"od_mm": 20.0, "wall_mm": 2.05},
+}
+HDPE_PE100_PN16 = {
+    20: {"od_mm": 20.0, "wall_mm": 3.0},
+    25: {"od_mm": 25.0, "wall_mm": 2.3},
+    32: {"od_mm": 32.0, "wall_mm": 3.0},
+    40: {"od_mm": 40.0, "wall_mm": 3.7},
+    50: {"od_mm": 50.0, "wall_mm": 4.6},
+    63: {"od_mm": 63.0, "wall_mm": 5.8},
+    75: {"od_mm": 75.0, "wall_mm": 6.8},
+    90: {"od_mm": 90.0, "wall_mm": 8.2},
+    110: {"od_mm": 110.0, "wall_mm": 10.0},
+    125: {"od_mm": 125.0, "wall_mm": 11.4},
+    140: {"od_mm": 140.0, "wall_mm": 12.7},
+    160: {"od_mm": 160.0, "wall_mm": 14.6},
+    180: {"od_mm": 180.0, "wall_mm": 16.4},
+    200: {"od_mm": 200.0, "wall_mm": 18.2},
+    225: {"od_mm": 225.0, "wall_mm": 20.5},
+    250: {"od_mm": 250.0, "wall_mm": 22.7},
+    280: {"od_mm": 280.0, "wall_mm": 25.4},
+    315: {"od_mm": 315.0, "wall_mm": 28.6},
+    355: {"od_mm": 355.0, "wall_mm": 32.3},
+    400: {"od_mm": 400.0, "wall_mm": 36.4},
+}
+HDPE_COIL_CBM = {
+    20: 0.055,
+    32: 0.159,
+    40: 0.25,
+    63: 0.585,
+}
+HDPE_STANDARD_PCS_40FT_6M = {
+    20: 28800,
+    25: 18432,
+    32: 11250,
+    40: 7200,
+    50: 4608,
+    63: 2888,
+    75: 2048,
+    90: 1352,
+    100: 1000,
+    110: 882,
+    125: 722,
+    140: 578,
+    150: 450,
+    160: 450,
+    180: 338,
+    200: 288,
+    225: 200,
+    250: 162,
+    280: 128,
+    300: 110,
+    315: 98,
+    355: 72,
+    400: 72,
+    450: 50,
+    500: 32,
+    560: 32,
+    630: 18,
+    710: 18,
+}
+HDPE_STANDARD_PCS_40FT_118M = {
+    dn: pcs // 2 for dn, pcs in HDPE_STANDARD_PCS_40FT_6M.items()
+}
 
 STEEL_NPS_OD = {
     15: 21.3, 20: 26.7, 25: 33.4, 32: 42.2, 40: 48.3, 50: 60.3,
@@ -57,7 +172,12 @@ STEEL_NPS_OD = {
 DENSITY = {
     "PP-R": 0.91,
     "PVC-U DWV": 1.42,
+    "PVC-U Sewer JEI/JERI": 1.42,
+    "PVC PBA PN10": 1.42,
+    "HDPE PE80 PN10": 0.96,
     "HDPE PE100 PN10": 0.96,
+    "HDPE PE100 PN12.5": 0.96,
+    "HDPE PE100 PN16": 0.96,
     "Steel-Plastic Composite": 2.5,  # composite, conservative
 }
 
@@ -73,6 +193,34 @@ def kg_per_metre(family: str, od_mm: float, wall_mm: float | None) -> float:
     area = math.pi / 4 * (od_m ** 2 - id_m ** 2)
     # density above is g/cc = 1000 kg/m³
     return area * rho * 1000.0
+
+
+def is_hdpe_family(family: str) -> bool:
+    return family.startswith("HDPE") or "PEAD" in family.upper()
+
+
+def manufacturer_hq_capacity(pipe: Pipe) -> int | None:
+    """Manufacturer 40HQ rule used in the ground-truth workbook.
+
+    For HDPE/PEAD, the vendor calculates 40HQ pipe capacity from package
+    envelope volume: 66 m3 divided by per-pipe/package CBM. Straight pipes use
+    OD^2 * length; coils can provide their own package CBM from the workbook.
+    """
+    if not is_hdpe_family(pipe.family):
+        return None
+    dn_match = re.search(r"\d+", pipe.size)
+    dn = int(dn_match.group(0)) if dn_match else None
+    if pipe.package_cbm_m3 is None and dn is not None:
+        if abs(pipe.length_m - 6.0) <= 0.1 and dn in HDPE_STANDARD_PCS_40FT_6M:
+            return HDPE_STANDARD_PCS_40FT_6M[dn]
+        if abs(pipe.length_m - 11.8) <= 0.1 and dn in HDPE_STANDARD_PCS_40FT_118M:
+            return HDPE_STANDARD_PCS_40FT_118M[dn]
+    cbm = pipe.package_cbm_m3
+    if cbm is None:
+        cbm = (pipe.od_mm / 1000.0) ** 2 * pipe.length_m
+    if cbm <= 0:
+        return None
+    return max(1, int(math.floor(CONTAINER_MANUFACTURER_VOLUME_M3 / cbm)))
 
 
 # --- catalog for the dropdowns ----------------------------------------------
@@ -113,11 +261,41 @@ def build_catalog() -> list[dict]:
             "id_mm": dim["od_mm"] - 2 * dim["wall_mm"],
             "can_telescope": True,
         })
+    for size, dim in PVC_SEWER_METRIC.items():
+        cat.append({
+            "family": "PVC-U Sewer JEI/JERI",
+            "size": size,
+            "dn": dim["dn"],
+            "od_mm": dim["od_mm"],
+            "wall_mm": dim["wall_mm"],
+            "id_mm": dim["od_mm"] - 2 * dim["wall_mm"],
+            "can_telescope": True,
+        })
+    for size, dim in PVC_PBA_PN10.items():
+        cat.append({
+            "family": "PVC PBA PN10",
+            "size": size,
+            "dn": dim["dn"],
+            "od_mm": dim["od_mm"],
+            "wall_mm": dim["wall_mm"],
+            "id_mm": dim["od_mm"] - 2 * dim["wall_mm"],
+            "can_telescope": True,
+        })
+    for dn, dim in sorted(HDPE_PE80_PN10.items()):
+        cat.append({
+            "family": "HDPE PE80 PN10",
+            "size": f"DN{dn}",
+            "dn": dn,
+            "od_mm": dim["od_mm"],
+            "wall_mm": dim["wall_mm"],
+            "id_mm": dim["od_mm"] - 2 * dim["wall_mm"],
+            "can_telescope": False,
+        })
     for dn in HDPE_SIZES:
         if dn in EXCLUDED_DN:
             continue
         od = float(dn)
-        wall = round(od / 17.0, 2)
+        wall = HDPE_PE100_PN10_WALL.get(dn, round(od / 17.0, 1))
         cat.append({
             "family": "HDPE PE100 PN10",
             "size": f"DN{dn}",
@@ -125,7 +303,33 @@ def build_catalog() -> list[dict]:
             "od_mm": od,
             "wall_mm": wall,
             "id_mm": od - 2 * wall,
-            "can_telescope": True,
+            "can_telescope": False,
+        })
+    for dn in HDPE_SIZES:
+        if dn in EXCLUDED_DN:
+            continue
+        wall = HDPE_PE100_PN125_WALL.get(dn, round(float(dn) / 13.6, 1))
+        cat.append({
+            "family": "HDPE PE100 PN12.5",
+            "size": f"DN{dn}",
+            "dn": dn,
+            "od_mm": float(dn),
+            "wall_mm": wall,
+            "id_mm": float(dn) - 2 * wall,
+            "can_telescope": False,
+        })
+    for dn in HDPE_SIZES:
+        if dn in EXCLUDED_DN:
+            continue
+        dim = HDPE_PE100_PN16.get(dn, {"od_mm": float(dn), "wall_mm": round(float(dn) / 11.0, 1)})
+        cat.append({
+            "family": "HDPE PE100 PN16",
+            "size": f"DN{dn}",
+            "dn": dn,
+            "od_mm": dim["od_mm"],
+            "wall_mm": dim["wall_mm"],
+            "id_mm": dim["od_mm"] - 2 * dim["wall_mm"],
+            "can_telescope": False,
         })
     for dn, od in STEEL_NPS_OD.items():
         if dn in EXCLUDED_DN:
@@ -162,6 +366,7 @@ class Pipe:
     id_mm: float | None
     can_telescope: bool
     kg_per_pipe: float
+    package_cbm_m3: float | None = None
 
     @property
     def od_m(self) -> float:
@@ -292,10 +497,16 @@ def items_to_pipes(items: list[dict]) -> list[Pipe]:
             raw_length = it.get("length_m", 5.8)
             length_m = 5.8 if raw_length in (None, "") else float(raw_length)
             qty = int(it["qty"])
+            raw_package_cbm = it.get("package_cbm_m3")
+            package_cbm_m3 = None if raw_package_cbm in (None, "") else float(raw_package_cbm)
         except (TypeError, ValueError):
             continue
         if length_m <= 0 or qty <= 0 or int(cat["dn"]) in EXCLUDED_DN:
             continue
+        if package_cbm_m3 and is_hdpe_family(it["family"]):
+            inferred_length_m = package_cbm_m3 / ((cat["od_mm"] / 1000.0) ** 2)
+            if 1.0 <= inferred_length_m <= CONTAINER_LENGTH_M + 0.5:
+                length_m = inferred_length_m
         # PP-R family normalisation for density lookup
         family_norm = "PP-R" if "PP-R" in it["family"] else it["family"]
         kg_per_m = kg_per_metre(family_norm, cat["od_mm"], cat["wall_mm"])
@@ -309,6 +520,7 @@ def items_to_pipes(items: list[dict]) -> list[Pipe]:
             id_mm=cat["id_mm"],
             can_telescope=cat["can_telescope"],
             kg_per_pipe=kg_per_m * length_m,
+            package_cbm_m3=package_cbm_m3,
         ))
     return pipes
 
@@ -375,6 +587,9 @@ def build_plan(items: list[dict]) -> dict:
             length_positions = max(1, int(math.floor(CONTAINER_LENGTH_M / sample.length_m)))
             stack = hex_stack_count(sample.od_m)
             geom_per_container = stack["cross_section_pipes"] * length_positions
+            manufacturer_cap = manufacturer_hq_capacity(sample)
+            if manufacturer_cap is not None:
+                geom_per_container = manufacturer_cap
             if geom_per_container <= 0:
                 continue
             # group units into containers
@@ -530,14 +745,39 @@ def parse_excel(path: str) -> list[dict]:
             break
     df = pd.read_excel(path, sheet_name=0, header=header_row)
     cols = list(df.columns)
-    desc_col = next((c for c in cols if "description" in str(c).lower()), cols[1])
-    qty_col = next((c for c in cols if "qty" in str(c).lower()), None)
+    desc_cols = [c for c in cols if "description" in str(c).lower() or str(c).strip() == "产品描述"]
+    desc_cols.sort(key=lambda c: (
+        0 if str(c).lower().startswith("description.") else
+        1 if str(c).strip() == "产品描述" else
+        2
+    ))
+    if not desc_cols:
+        desc_cols = [cols[1]]
+    qty_col = next((
+        c for c in cols
+        if "qty" in str(c).lower() and ("pc" in str(c).lower() or "（pc" in str(c).lower())
+    ), None)
+    if qty_col is None:
+        qty_col = next((c for c in cols if "qty" in str(c).lower()), None)
     if qty_col is None:
         return []
+    per_unit_cbm_col = None
+    cbm_idx = next((i for i, c in enumerate(cols) if str(c).strip().lower() == "cbm"), None)
+    if cbm_idx is not None and cbm_idx > 0:
+        per_unit_cbm_col = cols[cbm_idx - 1]
     items = []
     for _, row in df.iterrows():
-        desc = "" if not pd_notna(row.get(desc_col)) else str(row.get(desc_col)).strip()
-        if not desc or "pipe" not in desc.lower() or "fitting" in desc.lower():
+        desc = ""
+        info = None
+        for desc_col in desc_cols:
+            candidate = "" if not pd_notna(row.get(desc_col)) else str(row.get(desc_col)).strip()
+            if not candidate or "fitting" in candidate.lower():
+                continue
+            info = classify_description(candidate)
+            if info is not None:
+                desc = candidate
+                break
+        if info is None or not desc:
             continue
         try:
             qty = int(float(row.get(qty_col)))
@@ -545,9 +785,13 @@ def parse_excel(path: str) -> list[dict]:
             continue
         if qty <= 0:
             continue
-        info = classify_description(desc)
-        if info is None:
-            continue
+        if per_unit_cbm_col is not None and pd_notna(row.get(per_unit_cbm_col)):
+            try:
+                package_cbm_m3 = float(row.get(per_unit_cbm_col))
+            except (TypeError, ValueError):
+                package_cbm_m3 = 0.0
+            if package_cbm_m3 > 0 and is_hdpe_family(info["family"]):
+                info["package_cbm_m3"] = package_cbm_m3
         items.append({**info, "qty": qty})
     return items
 
@@ -562,14 +806,50 @@ def classify_description(desc: str) -> dict | None:
     length_match = re.search(r"(\d+(?:\.\d+)?)\s*m(?:\b|-|$)", desc_lower)
     length_m = float(length_match.group(1)) if length_match else 5.8
     dn_match = re.search(r"\bdn\s*(\d+)", desc_lower)
+    de_match = re.search(r"\bde\s*(\d+)", desc_lower)
     inch_match = re.search(r'(\d+)"', desc)
 
-    if "pe100" in desc_lower:
-        dn = int(dn_match.group(1)) if dn_match else 0
+    if "pead" in desc_lower or "pe100" in desc_lower or "pe 100" in desc_lower or "pe 80" in desc_lower:
+        hdpe_length_m = 6.0 if length_match is None else length_m
+        dn = int((de_match or dn_match).group(1)) if (de_match or dn_match) else 0
         if dn in EXCLUDED_DN:
             return None
+        is_pe80 = "pe80" in desc_lower or "pe 80" in desc_lower
+        is_sdr11 = "sdr11" in desc_lower or "sdr 11" in desc_lower
+        is_sdr136 = "sdr13.6" in desc_lower or "sdr 13.6" in desc_lower
+        is_sdr17 = "sdr17" in desc_lower or "sdr 17" in desc_lower
+        is_pn16 = "pn16" in desc_lower or "pn 16" in desc_lower
+        package_cbm_m3 = HDPE_COIL_CBM.get(dn) if length_m >= 50 else None
+        if is_pe80 and dn in HDPE_PE80_PN10:
+            out = {"family": "HDPE PE80 PN10", "size": f"DN{dn}", "length_m": hdpe_length_m}
+            if package_cbm_m3 is not None:
+                out["package_cbm_m3"] = package_cbm_m3
+            return out
+        if (is_pn16 or is_sdr11) and dn in HDPE_SIZES:
+            out = {"family": "HDPE PE100 PN16", "size": f"DN{dn}", "length_m": hdpe_length_m}
+            if package_cbm_m3 is not None:
+                out["package_cbm_m3"] = package_cbm_m3
+            return out
+        if is_sdr136 and dn in HDPE_SIZES:
+            return {"family": "HDPE PE100 PN12.5", "size": f"DN{dn}", "length_m": hdpe_length_m}
+        if is_sdr17 and dn in HDPE_SIZES:
+            return {"family": "HDPE PE100 PN10", "size": f"DN{dn}", "length_m": hdpe_length_m}
         if dn in HDPE_SIZES:
-            return {"family": "HDPE PE100 PN10", "size": f"DN{dn}", "length_m": length_m}
+            return {"family": "HDPE PE100 PN10", "size": f"DN{dn}", "length_m": hdpe_length_m}
+    if "pba" in desc_lower:
+        dn = int((dn_match or de_match).group(1)) if (dn_match or de_match) else 0
+        size = f"DN{dn}"
+        if size in PVC_PBA_PN10:
+            return {"family": "PVC PBA PN10", "size": size, "length_m": length_m}
+    if "pvc" in desc_lower and ("jei" in desc_lower or "jeri" in desc_lower or "esg" in desc_lower or "esgoto" in desc_lower):
+        if de_match:
+            size = f"DE{int(de_match.group(1))}"
+            if size in PVC_SEWER_METRIC:
+                return {"family": "PVC-U Sewer JEI/JERI", "size": size, "length_m": length_m}
+        if dn_match:
+            size = f"DN{int(dn_match.group(1))}"
+            if size in PVC_SEWER_METRIC:
+                return {"family": "PVC-U Sewer JEI/JERI", "size": size, "length_m": length_m}
     if "pvc-u dwv" in desc_lower and inch_match:
         size = f'{inch_match.group(1)}"'
         if size in PVC_D2665:
