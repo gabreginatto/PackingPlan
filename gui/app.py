@@ -27,7 +27,8 @@ def catalog():
 def plan():
     data = request.get_json(silent=True) or {}
     items = data.get("items", [])
-    return jsonify(build_plan(items))
+    allow_telescope = bool(data.get("allow_telescope", False))
+    return jsonify(build_plan(items, allow_telescope=allow_telescope))
 
 
 @app.route("/api/upload", methods=["POST"])

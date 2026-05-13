@@ -1,4 +1,5 @@
 // PackingPlan GUI
+const ORDER_STORE_KEY = "packingplan.savedOrders.v1";
 
 const state = {
   catalog: [],
@@ -6,6 +7,7 @@ const state = {
   containers: [],
   containerIdx: 0,
   summary: null,
+  savedOrders: {},
 };
 
 const el = (id) => document.getElementById(id);
@@ -17,11 +19,17 @@ async function init() {
   populateSizes();
   el("family").addEventListener("change", populateSizes);
   el("add-btn").addEventListener("click", addItem);
-  el("plan-btn").addEventListener("click", buildPlan);
+  el("plan-btn").addEventListener("click", () => buildPlan(false));
+  el("telescope-btn").addEventListener("click", () => buildPlan(true));
+  el("save-order-btn").addEventListener("click", saveCurrentOrder);
+  el("load-order-btn").addEventListener("click", loadSelectedOrder);
+  el("delete-order-btn").addEventListener("click", deleteSelectedOrder);
   el("prev").addEventListener("click", () => navigate(-1));
   el("next").addEventListener("click", () => navigate(1));
   setupDropzone();
+  loadSavedOrders();
   renderItems();
+  renderSavedOrders();
 }
 
 function families() {
@@ -69,11 +77,13 @@ function addItem() {
   } else {
     state.items.push({ family, size, length_m, qty });
   }
+  clearPlan();
   renderItems();
 }
 
 function removeItem(idx) {
   state.items.splice(idx, 1);
+  clearPlan();
   renderItems();
 }
 
@@ -96,17 +106,98 @@ function renderItems() {
     btn.addEventListener("click", () => removeItem(parseInt(btn.dataset.i, 10)));
   });
   el("item-count").textContent = state.items.length;
-  el("plan-btn").disabled = state.items.length === 0;
+  const hasItems = state.items.length > 0;
+  el("plan-btn").disabled = !hasItems;
+  el("telescope-btn").disabled = !hasItems;
+  el("save-order-btn").disabled = !hasItems;
+  renderOrderProfile();
 }
 
-async function buildPlan() {
-  el("plan-btn").disabled = true;
-  el("plan-btn").textContent = "Building…";
+function clearPlan() {
+  state.containers = [];
+  state.containerIdx = 0;
+  state.summary = null;
+  renderContainer();
+  renderSummary();
+}
+
+function loadSavedOrders() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(ORDER_STORE_KEY) || "{}");
+    state.savedOrders = parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    state.savedOrders = {};
+  }
+}
+
+function persistSavedOrders() {
+  localStorage.setItem(ORDER_STORE_KEY, JSON.stringify(state.savedOrders));
+}
+
+function saveCurrentOrder() {
+  if (!state.items.length) return;
+  const typedName = el("order-name").value.trim();
+  const fallback = `Order ${new Date().toLocaleString()}`;
+  const name = typedName || fallback;
+  state.savedOrders[name] = {
+    name,
+    saved_at: new Date().toISOString(),
+    items: state.items.map((it) => ({ ...it })),
+  };
+  persistSavedOrders();
+  renderSavedOrders(name);
+}
+
+function loadSelectedOrder() {
+  const name = el("saved-order-select").value;
+  const saved = state.savedOrders[name];
+  if (!saved || !Array.isArray(saved.items)) return;
+  state.items = saved.items.map((it) => ({ ...it }));
+  el("order-name").value = name;
+  clearPlan();
+  renderItems();
+}
+
+function deleteSelectedOrder() {
+  const name = el("saved-order-select").value;
+  if (!name || !state.savedOrders[name]) return;
+  delete state.savedOrders[name];
+  persistSavedOrders();
+  renderSavedOrders();
+}
+
+function renderSavedOrders(selectedName = "") {
+  const sel = el("saved-order-select");
+  const names = Object.keys(state.savedOrders).sort((a, b) => a.localeCompare(b));
+  sel.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = names.length ? "Select saved order" : "No saved orders";
+  sel.appendChild(placeholder);
+  for (const name of names) {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  }
+  sel.value = selectedName && state.savedOrders[selectedName] ? selectedName : "";
+  const hasSelection = Boolean(sel.value);
+  el("load-order-btn").disabled = !hasSelection;
+  el("delete-order-btn").disabled = !hasSelection;
+  sel.onchange = () => {
+    const selected = Boolean(sel.value);
+    el("load-order-btn").disabled = !selected;
+    el("delete-order-btn").disabled = !selected;
+  };
+}
+
+async function buildPlan(allowTelescope) {
+  setPlanActionsBusy(true, allowTelescope);
   try {
     const res = await fetch("/api/plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: state.items }),
+      body: JSON.stringify({ items: state.items, allow_telescope: allowTelescope }),
     });
     const data = await res.json();
     state.containers = data.containers || [];
@@ -115,9 +206,17 @@ async function buildPlan() {
     renderContainer();
     renderSummary();
   } finally {
-    el("plan-btn").disabled = false;
-    el("plan-btn").textContent = "Build packing plan →";
+    setPlanActionsBusy(false, allowTelescope);
   }
+}
+
+function setPlanActionsBusy(isBusy, telescopeMode) {
+  const hasItems = state.items.length > 0;
+  el("plan-btn").disabled = isBusy || !hasItems;
+  el("telescope-btn").disabled = isBusy || !hasItems;
+  el("plan-btn").textContent = isBusy && !telescopeMode ? "Building…" : "Build packing plan →";
+  el("telescope-btn").textContent =
+    isBusy && telescopeMode ? "Nesting pipes…" : "Build telescoped option";
 }
 
 function navigate(delta) {
@@ -134,6 +233,7 @@ function renderContainer() {
     el("empty-state").style.display = "flex";
     el("cross-section").style.display = "none";
     el("metrics").style.display = "none";
+    el("order-kpis").style.display = "none";
     el("container-label").textContent = "—";
     el("prev").disabled = true;
     el("next").disabled = true;
@@ -144,6 +244,7 @@ function renderContainer() {
   el("empty-state").style.display = "none";
   el("cross-section").style.display = "block";
   el("metrics").style.display = "grid";
+  el("order-kpis").style.display = "grid";
 
   el("container-label").textContent = `Container ${state.containerIdx + 1} of ${
     state.containers.length
@@ -296,16 +397,83 @@ function ringPositions(n, cx, cy, r) {
 function renderSummary() {
   if (!state.summary) {
     el("summary").innerHTML = "";
+    el("order-kpis").style.display = "none";
     return;
   }
   const s = state.summary;
   const totalKg = Math.round(s.total_weight_kg);
+  const containersToBook = s.containers_to_book ?? s.total_containers;
+  el("order-kpis").style.display = "grid";
+  el("ok-containers").textContent = fmt(containersToBook);
+  el("ok-mode").textContent = s.allow_telescope ? "Telescoped" : "Standard";
+  el("ok-nested").textContent = fmt(s.nested_pipes || 0);
   el("summary").innerHTML = `
-    <strong>${fmt(s.total_containers)}</strong> × 40ft container${
-    s.total_containers === 1 ? "" : "s"
+    <strong>${fmt(containersToBook)}</strong> × 40ft container${
+    containersToBook === 1 ? "" : "s"
   } &nbsp;·&nbsp;
     ${fmt(totalKg)} kg total &nbsp;·&nbsp;
-    ${fmt(s.nested_pipes)} pipes nested
+    ${s.allow_telescope ? "telescoped option" : "standard option"} &nbsp;·&nbsp;
+    ${fmt(s.nested_pipes || 0)} pipes nested
+  `;
+}
+
+function renderOrderProfile() {
+  const panel = el("order-profile");
+  const table = el("profile-table");
+  if (!state.items.length) {
+    panel.style.display = "none";
+    table.innerHTML = "";
+    el("profile-total").textContent = "—";
+    return;
+  }
+
+  const groups = new Map();
+  for (const it of state.items) {
+    const key = `${it.family}::${it.size}`;
+    const existing = groups.get(key) || {
+      family: it.family,
+      size: it.size,
+      qty: 0,
+      meters: 0,
+      lengths: new Set(),
+    };
+    existing.qty += Number(it.qty) || 0;
+    existing.meters += (Number(it.qty) || 0) * (Number(it.length_m) || 0);
+    existing.lengths.add(Number(it.length_m) || 0);
+    groups.set(key, existing);
+  }
+
+  const rows = [...groups.values()].sort((a, b) => b.meters - a.meters);
+  const totalMeters = rows.reduce((sum, row) => sum + row.meters, 0);
+  const maxMeters = Math.max(...rows.map((row) => row.meters), 1);
+  panel.style.display = "block";
+  el("profile-total").textContent = `${fmt(Math.round(totalMeters))} m total`;
+  table.innerHTML = `
+    <div class="profile-row profile-row-head">
+      <span>Pipe type</span>
+      <span>Qty</span>
+      <span>Meters</span>
+    </div>
+    ${rows
+      .map((row) => {
+        const width = Math.max(3, (row.meters / maxMeters) * 100);
+        const lengthText = [...row.lengths]
+          .sort((a, b) => a - b)
+          .map((n) => `${n}m`)
+          .join(", ");
+        return `
+          <div class="profile-row">
+            <div class="profile-name">
+              <div>${escapeHtml(row.family)} <span>${escapeHtml(row.size)}</span></div>
+              <small>${escapeHtml(lengthText)}</small>
+              <div class="profile-bar"><i style="width:${width.toFixed(1)}%"></i></div>
+            </div>
+            <div class="profile-num">${fmt(row.qty)}</div>
+            <div class="profile-num">${fmt(Math.round(row.meters))}</div>
+          </div>
+        `;
+      })
+      .join("")}
   `;
 }
 
@@ -351,6 +519,7 @@ async function uploadFile(file) {
         if (existing) existing.qty += it.qty;
         else state.items.push(it);
       }
+      clearPlan();
       renderItems();
     }
   } finally {

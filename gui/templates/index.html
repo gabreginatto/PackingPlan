@@ -53,10 +53,30 @@
 
       <div class="divider"></div>
 
+      <div class="save-panel">
+        <label>
+          <span class="lbl">Order name</span>
+          <input id="order-name" type="text" placeholder="e.g. BYD first order" />
+        </label>
+        <div class="save-actions">
+          <button id="save-order-btn" class="btn btn-ghost" disabled>Save order</button>
+        </div>
+        <div class="load-row">
+          <select id="saved-order-select" aria-label="Saved orders"></select>
+          <button id="load-order-btn" class="btn btn-ghost" disabled>Load</button>
+          <button id="delete-order-btn" class="btn btn-icon" title="Delete saved order" disabled>×</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
       <h3 class="list-title">Items <span id="item-count" class="muted">0</span></h3>
       <ul id="order-list" class="order-list"></ul>
 
-      <button id="plan-btn" class="btn btn-primary" disabled>Build packing plan →</button>
+      <div class="plan-actions">
+        <button id="plan-btn" class="btn btn-primary" disabled>Build packing plan →</button>
+        <button id="telescope-btn" class="btn btn-ghost" disabled>Build telescoped option</button>
+      </div>
     </section>
 
     <!-- RIGHT: preview -->
@@ -69,6 +89,29 @@
           <button id="next" class="btn btn-icon" disabled>→</button>
         </div>
       </div>
+
+      <div class="order-kpis" id="order-kpis" style="display:none">
+        <div class="order-kpi">
+          <div class="ok-value" id="ok-containers">—</div>
+          <div class="ok-label">Containers to book</div>
+        </div>
+        <div class="order-kpi">
+          <div class="ok-value" id="ok-mode">—</div>
+          <div class="ok-label">Plan mode</div>
+        </div>
+        <div class="order-kpi">
+          <div class="ok-value" id="ok-nested">—</div>
+          <div class="ok-label">Nested pipes</div>
+        </div>
+      </div>
+
+      <section class="profile-panel" id="order-profile" style="display:none">
+        <div class="profile-head">
+          <h3 class="panel-title">Order profile</h3>
+          <div class="profile-total" id="profile-total">—</div>
+        </div>
+        <div class="profile-table" id="profile-table"></div>
+      </section>
 
       <div class="stage">
         <div id="empty-state" class="empty-state">

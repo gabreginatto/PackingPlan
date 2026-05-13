@@ -525,8 +525,8 @@ def items_to_pipes(items: list[dict]) -> list[Pipe]:
     return pipes
 
 
-def build_plan(items: list[dict]) -> dict:
-    """Group pipes by (family-base, length), telescope where possible, then
+def build_plan(items: list[dict], allow_telescope: bool = False) -> dict:
+    """Group pipes by (family-base, length), optionally telescope, then
     compute container count per group. Return JSON-friendly structure.
     """
     pipes = items_to_pipes(items)
@@ -565,7 +565,7 @@ def build_plan(items: list[dict]) -> dict:
                 remaining[h.size] -= 1
                 # Try to fill with smaller pipes; recursively nest
                 available = (h.id_mm - HANDLING_CLEARANCE_MM) if h.id_mm else 0
-                if h.can_telescope and available > 0:
+                if allow_telescope and h.can_telescope and available > 0:
                     self_fill_inner(unit, h, members, remaining, available)
                 host_units.append(unit)
 
@@ -620,9 +620,12 @@ def build_plan(items: list[dict]) -> dict:
     total_volume_pre = sum(p.qty * math.pi / 4 * p.od_m ** 2 * p.length_m for p in pipes)
     total_weight = sum(p.qty * p.kg_per_pipe for p in pipes)
     summary = {
+        "allow_telescope": allow_telescope,
+        "containers_to_book": len(containers),
         "total_containers": len(containers),
         "total_weight_kg": total_weight,
         "total_volume_m3": total_volume_pre,
+        "loose_pipes": total_pipes_loose,
         "nested_pipes": total_pipes_nested,
     }
     return {"containers": containers, "summary": summary}
